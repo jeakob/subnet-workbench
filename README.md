@@ -4,6 +4,8 @@ A modern, browser-only network engineering toolkit. Inspired by davidc.net's cla
 
 Everything runs client-side. No tracking, no backend.
 
+URL: https://jeakob.github.io/subnet-workbench/
+
 ## Tools
 
 - **Visual Subnet Calculator** — IPv4 split/join with notes & color-coding
