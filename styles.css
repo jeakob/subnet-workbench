@@ -260,8 +260,8 @@ input, select, textarea { font-family: inherit; color: inherit; }
   user-select: none;
 }
 .input-row .prefix-input {
-  flex: 0 0 56px;
-  text-align: center;
+  flex: 0 0 140px;
+  text-align: left;
 }
 
 .label {
