@@ -48,7 +48,25 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark"></div>
+          <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+            {/* connection lines from central hub to 4 outer nodes */}
+            <g stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" opacity="0.55" fill="none">
+              <line x1="16" y1="16" x2="6" y2="6"/>
+              <line x1="16" y1="16" x2="26" y2="6"/>
+              <line x1="16" y1="16" x2="6" y2="26"/>
+              <line x1="16" y1="16" x2="26" y2="26"/>
+            </g>
+            {/* 4 outer nodes (subnets) */}
+            <g fill="currentColor" opacity="0.85">
+              <circle cx="6" cy="6" r="3"/>
+              <circle cx="26" cy="6" r="3"/>
+              <circle cx="6" cy="26" r="3"/>
+              <circle cx="26" cy="26" r="3"/>
+            </g>
+            {/* central hub */}
+            <circle cx="16" cy="16" r="4.5" fill="currentColor"/>
+            <circle cx="16" cy="16" r="1.8" fill="var(--bg)"/>
+          </svg>
           <span>Subnet Workbench</span>
           <sub>v1</sub>
         </div>
