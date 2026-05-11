@@ -147,20 +147,61 @@ function VisualV4() {
               <div className="input-row">
                 <input
                   value={networkStr}
-                  onChange={e => setNetworkStr(e.target.value)}
+                  onChange={e => {
+                    const raw = e.target.value;
+                    // CIDR shorthand: split "10.0.0.0/8" → ip + prefix
+                    if (raw.includes('/')) {
+                      const [ipPart, prefPart = ''] = raw.split('/');
+                      setNetworkStr(ipPart);
+                      const digits = prefPart.replace(/\D/g, '').slice(0, 2);
+                      if (digits !== '') setPrefixStr(digits);
+                      return;
+                    }
+                    // "10.0.0.0 255.0.0.0" or "10.0.0.0,255.0.0.0" — mask form
+                    const m = raw.match(/^\s*(\S+)[\s,]+(\S+)\s*$/);
+                    if (m) {
+                      const maskPrefix = NetLib.v4_parse_mask(m[2]);
+                      setNetworkStr(m[1]);
+                      if (maskPrefix !== null) setPrefixStr(String(maskPrefix));
+                      return;
+                    }
+                    setNetworkStr(raw);
+                  }}
                   onKeyDown={e => e.key === 'Enter' && applyNetwork()}
-                  placeholder="10.0.0.0"
+                  placeholder="10.0.0.0/8"
                   spellCheck={false}
                 />
               </div>
             </Field>
-            <Field label="Prefix">
+            <Field label="Prefix or mask">
               <div className="input-row">
                 <span className="slash">/</span>
                 <input
                   className="prefix-input"
                   value={prefixStr}
-                  onChange={e => setPrefixStr(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  placeholder="24"
+                  onChange={e => {
+                    // Allow digits and dots; cap length so a full dotted mask fits.
+                    const v = e.target.value.replace(/[^\d.]/g, '').slice(0, 15);
+                    // If it's a complete, valid dotted mask, convert to prefix immediately.
+                    if (v.includes('.')) {
+                      const maskPrefix = NetLib.v4_parse_mask(v);
+                      if (maskPrefix !== null) {
+                        setPrefixStr(String(maskPrefix));
+                        return;
+                      }
+                      setPrefixStr(v);
+                      return;
+                    }
+                    setPrefixStr(v);
+                  }}
+                  onBlur={e => {
+                    // Final conversion attempt for partial masks
+                    if (prefixStr.includes('.')) {
+                      const maskPrefix = NetLib.v4_parse_mask(prefixStr);
+                      if (maskPrefix !== null) setPrefixStr(String(maskPrefix));
+                    }
+                  }}
                   onKeyDown={e => e.key === 'Enter' && applyNetwork()}
                 />
               </div>
