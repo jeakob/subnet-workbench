@@ -66,8 +66,18 @@ function VisualV4() {
 
   function applyNetwork() {
     setError('');
-    const ip = NetLib.v4_parse(networkStr);
-    const p = parseInt(prefixStr, 10);
+    // Accept "10.0.0.0/8" in the network field — strip the slash portion before parsing.
+    let netInput = networkStr;
+    let prefInput = prefixStr;
+    if (netInput.includes('/')) {
+      const [ipPart, prefPart = ''] = netInput.split('/');
+      netInput = ipPart.trim();
+      if (prefPart.trim() !== '') prefInput = prefPart.trim();
+      setNetworkStr(netInput);
+      setPrefixStr(prefInput);
+    }
+    const ip = NetLib.v4_parse(netInput);
+    const p = parseInt(prefInput, 10);
     if (ip === null) { setError('Invalid IP address'); return; }
     if (!Number.isFinite(p) || p < 0 || p > 32) { setError('Prefix must be 0–32'); return; }
     const aligned = NetLib.v4_network(ip, p) >>> 0;
@@ -149,10 +159,12 @@ function VisualV4() {
                   value={networkStr}
                   onChange={e => {
                     const raw = e.target.value;
-                    // CIDR shorthand: split "10.0.0.0/8" → ip + prefix
+                    // Always reflect the typed value so the user can finish typing
+                    // "10.0.0.0/8" without the slash being eaten mid-keystroke.
+                    setNetworkStr(raw);
+                    // CIDR shorthand: mirror the prefix into the prefix field as it's typed.
                     if (raw.includes('/')) {
-                      const [ipPart, prefPart = ''] = raw.split('/');
-                      setNetworkStr(ipPart);
+                      const prefPart = raw.split('/')[1] || '';
                       const digits = prefPart.replace(/\D/g, '').slice(0, 2);
                       if (digits !== '') setPrefixStr(digits);
                       return;
@@ -161,11 +173,11 @@ function VisualV4() {
                     const m = raw.match(/^\s*(\S+)[\s,]+(\S+)\s*$/);
                     if (m) {
                       const maskPrefix = NetLib.v4_parse_mask(m[2]);
-                      setNetworkStr(m[1]);
-                      if (maskPrefix !== null) setPrefixStr(String(maskPrefix));
-                      return;
+                      if (maskPrefix !== null) {
+                        setNetworkStr(m[1]);
+                        setPrefixStr(String(maskPrefix));
+                      }
                     }
-                    setNetworkStr(raw);
                   }}
                   onKeyDown={e => e.key === 'Enter' && applyNetwork()}
                   placeholder="10.0.0.0/8"
