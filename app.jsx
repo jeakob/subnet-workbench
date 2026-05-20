@@ -15,6 +15,7 @@ const TABS = [
   { id: 'compare',  label: 'Compare',        comp: 'SubnetCompare' },
   { id: 'range',    label: 'Range → CIDR',   comp: 'RangeToCidr' },
   { id: 'vlsm',     label: 'VLSM',           comp: 'VlsmPlanner' },
+  { id: 'summary',  label: 'Summarise',      comp: 'SubnetSummary' },
 ];
 
 function App() {

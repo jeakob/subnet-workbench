@@ -178,6 +178,208 @@
     return { allocations, used, total: parentSize, free: parentSize - used };
   }
 
+  // ─────────────────────── Summarization / Aggregation ───────────────────────
+  // Single supernet: smallest CIDR that contains every input prefix.
+  // Returns { ip, prefix, lo, hi, requested_size, summary_size, waste }.
+  function v4_summary(cidrs) {
+    if (!cidrs || !cidrs.length) return null;
+    let lo = 0xFFFFFFFF >>> 0;
+    let hi = 0;
+    let requested = 0;
+    // Track requested addresses via interval union to avoid double-counting overlaps.
+    const ivals = [];
+    for (const c of cidrs) {
+      const s = v4_network(c.ip, c.prefix) >>> 0;
+      const e = v4_broadcast(c.ip, c.prefix) >>> 0;
+      if (s < lo) lo = s;
+      if (e > hi) hi = e;
+      ivals.push([s, e]);
+    }
+    // Merge intervals to count true union size
+    ivals.sort((a, b) => a[0] - b[0]);
+    let merged = [ivals[0].slice()];
+    for (let i = 1; i < ivals.length; i++) {
+      const last = merged[merged.length - 1];
+      if (ivals[i][0] <= last[1] + 1) {
+        if (ivals[i][1] > last[1]) last[1] = ivals[i][1];
+      } else {
+        merged.push(ivals[i].slice());
+      }
+    }
+    for (const m of merged) requested += (m[1] - m[0] + 1);
+    // Find shortest prefix p such that network(lo, p) === network(hi, p)
+    let p = 32;
+    let xor = (lo ^ hi) >>> 0;
+    while (xor) { xor = xor >>> 1; p--; }
+    const ip = (lo & v4_mask(p)) >>> 0;
+    const summary_size = Math.pow(2, 32 - p);
+    return {
+      ip, prefix: p, lo, hi,
+      requested_size: requested,
+      summary_size,
+      waste: summary_size - requested,
+      merged_ranges: merged,
+      exact: merged.length === 1 && merged[0][0] === ip && merged[0][1] === (ip + summary_size - 1),
+    };
+  }
+
+  // Optimal aggregation: minimal disjoint CIDR set whose union equals the union of inputs.
+  // Returns array of {ip, prefix}, sorted, plus diagnostics.
+  function v4_aggregate(cidrs) {
+    if (!cidrs || !cidrs.length) return { cidrs: [], merged: [], overlaps: [] };
+    // Normalize to network address
+    const norm = cidrs.map(c => ({
+      ip: v4_network(c.ip, c.prefix) >>> 0,
+      prefix: c.prefix,
+      start: v4_network(c.ip, c.prefix) >>> 0,
+      end: v4_broadcast(c.ip, c.prefix) >>> 0,
+    }));
+    // Detect overlaps in original inputs (pairs)
+    const overlaps = [];
+    const sorted = norm.slice().sort((a, b) => a.start - b.start);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].start <= sorted[i - 1].end) {
+        overlaps.push({
+          a: { ip: sorted[i - 1].ip, prefix: sorted[i - 1].prefix },
+          b: { ip: sorted[i].ip,     prefix: sorted[i].prefix },
+        });
+      }
+    }
+    // Merge to interval list
+    const merged = [];
+    for (const c of sorted) {
+      if (merged.length && c.start <= merged[merged.length - 1].end + 1) {
+        if (c.end > merged[merged.length - 1].end) merged[merged.length - 1].end = c.end;
+      } else {
+        merged.push({ start: c.start, end: c.end });
+      }
+    }
+    // Decompose each merged range into minimal CIDR blocks
+    const out = [];
+    for (const r of merged) {
+      const blocks = _v4_range_to_blocks(r.start, r.end);
+      for (const b of blocks) out.push(b);
+    }
+    return { cidrs: out, merged, overlaps };
+  }
+
+  // Internal: range → CIDR blocks (returns {ip, prefix}[]) — handles 0..2^32 edge.
+  function _v4_range_to_blocks(start, end) {
+    const out = [];
+    let cur = start >>> 0;
+    // Use plain numbers up to 2^32-1; handle final block specially.
+    while (cur <= end) {
+      // largest power-of-two aligned at cur
+      let maxAlignBits = 32;
+      if (cur !== 0) {
+        let x = cur, c = 0;
+        while ((x & 1) === 0 && c < 32) { x = x >>> 1; c++; }
+        maxAlignBits = c;
+      }
+      // largest by size (don't overshoot end)
+      const remaining = end - cur + 1; // 1..2^32 (fits in number)
+      let maxSizeBits = Math.floor(Math.log2(remaining));
+      if (Math.pow(2, maxSizeBits) > remaining) maxSizeBits--;
+      const bits = Math.min(maxAlignBits, maxSizeBits);
+      const prefix = 32 - bits;
+      const size = Math.pow(2, bits);
+      out.push({ ip: cur >>> 0, prefix });
+      cur = cur + size;
+      if (cur > 0xFFFFFFFF) break;
+    }
+    return out;
+  }
+
+  // Parse a multi-line list of CIDRs. Accepts: 10.0.0.0/24, 10.0.0.0, 10.0.0.0 255.255.255.0,
+  // ranges "10.0.0.0-10.0.0.255". Returns { ok: [{ip,prefix,raw}], bad: [{raw, reason}] }.
+  function v4_parse_list(text) {
+    const ok = [], bad = [];
+    const lines = (text || '').split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
+    for (const raw of lines) {
+      // Strip comments after #
+      const line = raw.replace(/#.*$/, '').trim();
+      if (!line) continue;
+      // Range form: a.b.c.d-e.f.g.h
+      const rm = line.match(/^([\d.]+)\s*[-–]\s*([\d.]+)$/);
+      if (rm) {
+        const blocks = v4_range_to_cidrs(rm[1], rm[2]);
+        if (!blocks) { bad.push({ raw, reason: 'invalid range' }); continue; }
+        for (const b of blocks) ok.push({ ...b, raw });
+        continue;
+      }
+      // IP + mask form
+      const mm = line.match(/^([\d.]+)\s+([\d.]+)$/);
+      if (mm) {
+        const ip = v4_parse(mm[1]);
+        const p = v4_parse_mask(mm[2]);
+        if (ip === null || p === null) { bad.push({ raw, reason: 'invalid ip/mask' }); continue; }
+        ok.push({ ip, prefix: p, raw });
+        continue;
+      }
+      // CIDR or bare IP (treat bare as /32)
+      const c = v4_parse_cidr(line);
+      if (c) { ok.push({ ...c, raw }); continue; }
+      bad.push({ raw, reason: 'unparseable' });
+    }
+    return { ok, bad };
+  }
+
+  // Common-bits analysis: how many leading bits are identical across all inputs (treating
+  // each input as the network address). Useful for explaining "why is the summary /N?".
+  function v4_common_bits(cidrs) {
+    if (!cidrs.length) return 0;
+    let n = v4_network(cidrs[0].ip, cidrs[0].prefix) >>> 0;
+    let agree = 32;
+    for (let i = 1; i < cidrs.length; i++) {
+      const c = v4_network(cidrs[i].ip, cidrs[i].prefix) >>> 0;
+      let xor = (n ^ c) >>> 0;
+      let common = 32;
+      while (xor) { xor = xor >>> 1; common--; }
+      if (common < agree) agree = common;
+    }
+    return agree;
+  }
+
+  // ─────────────────────── IPv6 summarization ───────────────────────
+  function v6_summary(cidrs) {
+    if (!cidrs || !cidrs.length) return null;
+    let lo = (1n << 128n) - 1n, hi = 0n;
+    let requested = 0n;
+    const ivals = [];
+    for (const c of cidrs) {
+      const s = v6_network(c.ip, c.prefix);
+      const e = v6_last(c.ip, c.prefix);
+      if (s < lo) lo = s;
+      if (e > hi) hi = e;
+      ivals.push([s, e]);
+    }
+    ivals.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+    const merged = [[ivals[0][0], ivals[0][1]]];
+    for (let i = 1; i < ivals.length; i++) {
+      const last = merged[merged.length - 1];
+      if (ivals[i][0] <= last[1] + 1n) {
+        if (ivals[i][1] > last[1]) last[1] = ivals[i][1];
+      } else {
+        merged.push([ivals[i][0], ivals[i][1]]);
+      }
+    }
+    for (const m of merged) requested += (m[1] - m[0] + 1n);
+    // Find shortest prefix p
+    let p = 128;
+    let xor = lo ^ hi;
+    while (xor > 0n) { xor >>= 1n; p--; }
+    const ip = lo & v6_mask(p);
+    const summary_size = 1n << BigInt(128 - p);
+    return {
+      ip, prefix: p, lo, hi,
+      requested_size: requested,
+      summary_size,
+      waste: summary_size - requested,
+      merged_ranges: merged,
+      exact: merged.length === 1 && merged[0][0] === ip && merged[0][1] === (ip + summary_size - 1n),
+    };
+  }
+
   // ─────────────────────── IPv6 ───────────────────────
   function v6_parse(str) {
     if (typeof str !== 'string') return null;
@@ -402,6 +604,8 @@
     v4_size, v4_usable, v4_first_host, v4_last_host, v4_parse_cidr, v4_parse_mask,
     v4_to_binary, v4_class, v4_is_private, v4_is_special,
     v4_contains, v4_overlaps, v4_range_to_cidrs, v4_vlsm,
+    v4_summary, v4_aggregate, v4_parse_list, v4_common_bits,
+    v6_summary,
     v6_parse, v6_format, v6_mask, v6_network, v6_last,
     v6_parse_cidr, v6_size, v6_size_human, v6_type, v6_eui64,
     vs_make_root, vs_split, vs_join, vs_can_join, vs_walk_leaves,
