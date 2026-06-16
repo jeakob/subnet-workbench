@@ -546,22 +546,24 @@
     // Compact form: prefix tree as "1" for branch, "0" for leaf, plus notes/colors map.
     let bits = '';
     const meta = {};
-    function walk(node, idx) {
+    let leafIdx = 0;
+    // NOTE: meta is keyed by LEAF index (only leaves increment the counter),
+    // because vs_deserialize reads it back the same way. Keying by node index
+    // here would shift metadata onto the wrong leaf for any split tree.
+    function walk(node) {
       if (node.leaf) {
         bits += '0';
         if (node.note || node.color || node.detached || node.divider || node.dividerLabel) {
-          meta[idx] = { n: node.note, c: node.color, x: node.detached ? 1 : 0, d: node.divider ? 1 : 0, dl: node.dividerLabel };
+          meta[leafIdx] = { n: node.note, c: node.color, x: node.detached ? 1 : 0, d: node.divider ? 1 : 0, dl: node.dividerLabel };
         }
-        return idx + 1;
-      } else {
-        bits += '1';
-        let next = idx + 1;
-        next = walk(node.left, next);
-        next = walk(node.right, next);
-        return next;
+        leafIdx++;
+        return;
       }
+      bits += '1';
+      walk(node.left);
+      walk(node.right);
     }
-    walk(root, 0);
+    walk(root);
     return { bits, meta, root: { ip: root.ip, prefix: root.prefix } };
   }
   function vs_deserialize(data) {
