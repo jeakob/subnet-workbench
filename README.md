@@ -1,15 +1,14 @@
 # Subnet Workbench
 
-A modern, browser-only network engineering toolkit. Inspired by davidc.net's classic Visual Subnet Calculator, modernized with IPv6, ACL/wildcard tooling, range→CIDR summarization, VLSM planning, and overlap checks.
+A fast, no-nonsense IP toolkit that runs entirely in your browser. Eight network-engineering utilities under one roof — visual subnet planning, IPv6, mask/CIDR conversion, ACL wildcards, range summarization, VLSM, and overlap checks.
 
-Everything runs client-side. No tracking, no backend.
+Everything runs client-side. No tracking, no backend, no install.
 
-URL: https://jeakob.github.io/subnet-workbench/
+> Live: open `Subnet Calculator.html` locally or deploy to GitHub Pages (instructions below).
 
 ## Tools
 
-- **Visual Subnet Calculator** — IPv4 split/join with notes & color-coding. The **Separate** action carves any subnet out of its parent plan into its own top-level network (the original allocation stays visible, dimmed, so the parent plan still reflects what's been carved out).
-
+- **Visual Subnet Calculator** — IPv4 split/join with notes, color-coding, shareable URL state. Accepts `10.0.0.0/8` shorthand or dotted-mask input. **Multi-network workspace** lets you plan unrelated address blocks side-by-side, and the **Separate** action carves any subnet out of its parent plan into its own top-level network (the original allocation stays visible, dimmed, so the parent plan still reflects what's been carved out).
 - **IPv6 Subnet Calculator** — prefix splitting, hex breakdown, EUI-64 helper
 - **CIDR ↔ Mask** — instant two-way conversion + binary view
 - **Wildcard / ACL Builder** — Cisco inverse mask + ready-to-paste ACL lines
@@ -42,7 +41,7 @@ The workflow aliases `Subnet Calculator.html` to `index.html` so the app loads a
 
 ## Local dev
 
-Just open `Subnet Calculator.html` in a browser. Everything is static.
+Just open `Subnet Calculator.html` in a browser. Everything is static — no server, no dependencies to install.
 
 ## License
 

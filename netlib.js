@@ -549,7 +549,9 @@
     function walk(node, idx) {
       if (node.leaf) {
         bits += '0';
-        if (node.note || node.color) meta[idx] = { n: node.note, c: node.color };
+        if (node.note || node.color || node.detached || node.divider || node.dividerLabel) {
+          meta[idx] = { n: node.note, c: node.color, x: node.detached ? 1 : 0, d: node.divider ? 1 : 0, dl: node.dividerLabel };
+        }
         return idx + 1;
       } else {
         bits += '1';
@@ -569,7 +571,7 @@
       const c = bits[i++];
       if (c === '0') {
         const m = meta[leafIdx++] || {};
-        return { leaf: true, ip, prefix, note: m.n, color: m.c };
+        return { leaf: true, ip, prefix, note: m.n, color: m.c, detached: !!m.x, divider: !!m.d, dividerLabel: m.dl };
       }
       const childPrefix = prefix + 1;
       const half = Math.pow(2, 32 - childPrefix);

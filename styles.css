@@ -651,6 +651,138 @@ tr.detached td {
 }
 tr.detached .vs-tag,
 tr.detached .vs-act { text-decoration: none; opacity: 1; }
+
+/* divider between network blocks */
+.net-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 2px;
+  color: var(--fg-dim);
+}
+.net-divider::before,
+.net-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed var(--line-strong);
+}
+.net-divider span {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* icon-style action buttons (separate / reattach) */
+.vs-act-icon {
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 7px;
+  font-family: var(--mono);
+}
+.vs-act.active {
+  background: var(--accent);
+  color: #0d2828;
+  border-color: var(--accent);
+}
+
+/* in-table section divider (visual grouping within one network) */
+.vs-divider-row td {
+  padding: 0 !important;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.vs-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+}
+.vs-section-mark {
+  width: 4px;
+  align-self: stretch;
+  min-height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.vs-section-input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 2px 0;
+}
+.vs-section-input::placeholder {
+  color: var(--fg-dim);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  font-style: italic;
+}
+.vs-section-x {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.vs-section-x:hover { color: var(--bad); background: var(--bg-3); }
+
+/* hover-to-insert section divider (appears in the gap between subnet rows) */
+.vs-insert-row td {
+  padding: 0 !important;
+  border: 0;
+}
+.vs-insert {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  height: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.vs-insert:hover,
+.vs-insert:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+.vs-insert-line {
+  flex: 1;
+  height: 0;
+  border-top: 1px dashed var(--accent);
+}
+.vs-insert-chip {
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  white-space: nowrap;
+}
 .vs-tag {
   display: inline-flex;
   align-items: center;
