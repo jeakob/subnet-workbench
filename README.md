@@ -5,6 +5,8 @@ A fast, no-nonsense IP toolkit that runs entirely in your browser. Eight network
 Everything runs client-side. No tracking, no backend, no install.
 
 > Live: open `Subnet Calculator.html` locally or deploy to GitHub Pages (instructions below).
+>
+> URL: https://jeakob.github.io/subnet-workbench/
 
 ## Tools
 
