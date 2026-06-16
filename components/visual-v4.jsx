@@ -90,14 +90,13 @@ function VisualV4() {
     return { ip: aligned, prefix: p };
   }
 
-  function applyPrimary() {
+  function applyToNetwork(targetIdx) {
     setError('');
     const r = parseNetInputs();
     if (r.error) { setError(r.error); return; }
-    setNetworks(ns => {
-      const head = { id: ns[0]?.id || _nextId(), tree: NetLib.vs_make_root(r.ip, r.prefix) };
-      return [head, ...ns.slice(1)];
-    });
+    setNetworks(ns => ns.map((n, i) =>
+      i === targetIdx ? { ...n, tree: NetLib.vs_make_root(r.ip, r.prefix) } : n
+    ));
   }
 
   function addAsNew() {
@@ -177,6 +176,16 @@ function VisualV4() {
     });
   }
 
+  // Visual section divider: toggle a labeled break ABOVE a subnet, within the
+  // same network. Purely a visual grouping — does not change addressing.
+  function toggleDivider(idx, path) {
+    updateTree(idx, tree => {
+      const node = NetLib.vs_at_path(tree, path);
+      if (!node || !node.leaf) return tree;
+      return NetLib.vs_replace(tree, path, { ...node, divider: !node.divider });
+    });
+  }
+
   function shareLink() {
     navigator.clipboard.writeText(window.location.href).catch(() => {});
   }
@@ -234,7 +243,7 @@ function VisualV4() {
                       }
                     }
                   }}
-                  onKeyDown={e => e.key === 'Enter' && applyPrimary()}
+                  onKeyDown={e => e.key === 'Enter' && applyToNetwork(0)}
                   placeholder="10.0.0.0/8"
                   spellCheck={false}
                 />
@@ -263,15 +272,22 @@ function VisualV4() {
                       if (maskPrefix !== null) setPrefixStr(String(maskPrefix));
                     }
                   }}
-                  onKeyDown={e => e.key === 'Enter' && applyPrimary()}
+                  onKeyDown={e => e.key === 'Enter' && applyToNetwork(0)}
                 />
               </div>
             </Field>
             <Field label=" ">
-              <div className="btn-group">
-                <button className="btn btn-primary" onClick={applyPrimary} title="Replace network #1 with this">
-                  {networks.length > 1 ? 'Update #1' : 'Update'}
-                </button>
+              <div className="btn-group" style={{ flexWrap: 'wrap' }}>
+                {networks.length === 1
+                  ? <button className="btn btn-primary" onClick={() => applyToNetwork(0)} title="Set this as the network base">Update</button>
+                  : networks.map((n, i) => (
+                      <button
+                        key={n.id}
+                        className={'btn' + (i === 0 ? ' btn-primary' : '')}
+                        onClick={() => applyToNetwork(i)}
+                        title={`Overwrite network #${i + 1} (${NetLib.v4_format(n.tree.ip)}/${n.tree.prefix}) with this address`}
+                      >Update #{i + 1}</button>
+                    ))}
                 <button className="btn" onClick={addAsNew} title="Add a separate top-level network">+ Add network</button>
                 <button className="btn btn-ghost" onClick={shareLink} title="Copy share link">Share</button>
                 <button className="btn btn-ghost" onClick={exportAll} title="Export all networks as JSON">Export</button>
@@ -285,8 +301,9 @@ function VisualV4() {
       <VsColumnsToolbar cols={cols} setCols={setCols} />
 
       {networks.map((n, idx) => (
+        <React.Fragment key={n.id}>
+        {idx > 0 && <div className="net-divider" aria-hidden="true"><span>network {idx + 1}</span></div>}
         <NetworkBlock
-          key={n.id}
           idx={idx}
           tree={n.tree}
           cols={cols}
@@ -296,9 +313,11 @@ function VisualV4() {
           onLeafProp={(path, prop, value) => setLeafProp(idx, path, prop, value)}
           onDetach={path => detachAt(idx, path)}
           onReattach={path => reattachAt(idx, path)}
+          onToggleDivider={path => toggleDivider(idx, path)}
           onRemove={() => removeNetwork(idx)}
           onReset={() => resetNetwork(idx)}
         />
+        </React.Fragment>
       ))}
 
       <div className="foot">
@@ -339,12 +358,15 @@ function VsColumnsToolbar({ cols, setCols }) {
   );
 }
 
-function NetworkBlock({ idx, tree, cols, canRemove, onSplit, onJoin, onLeafProp, onDetach, onReattach, onRemove, onReset }) {
+function NetworkBlock({ idx, tree, cols, canRemove, onSplit, onJoin, onLeafProp, onDetach, onReattach, onToggleDivider, onRemove, onReset }) {
   const rows = [];
   NetLib.vs_walk_leaves(tree, (leaf, path) => rows.push({ leaf, path }));
   const totalAddresses = NetLib.v4_size(tree.prefix);
   const detachedCount = rows.filter(r => r.leaf.detached).length;
   const activeCount = rows.length - detachedCount;
+  // Number of visible columns (for divider rows that span the whole table)
+  const totalCols = ['subnet','netmask','range','useable','hosts','note','color']
+    .filter(k => cols[k]).length + 1;
 
   return (
     <div className="card">
@@ -402,7 +424,42 @@ function NetworkBlock({ idx, tree, cols, canRemove, onSplit, onJoin, onLeafProp,
               }
               const canDetach = !leaf.detached;
               return (
-                <tr key={path.join('') + '-' + leaf.prefix + '-' + leaf.ip} className={colorClass + detachedClass}>
+                <React.Fragment key={path.join('') + '-' + leaf.prefix + '-' + leaf.ip}>
+                {leaf.divider ? (
+                  <tr className="vs-divider-row">
+                    <td colSpan={totalCols}>
+                      <div className="vs-section">
+                        <span className="vs-section-mark"></span>
+                        <input
+                          className="vs-section-input"
+                          value={leaf.dividerLabel || ''}
+                          onChange={e => onLeafProp(path, 'dividerLabel', e.target.value)}
+                          placeholder="Section label (e.g. DMZ, Servers, Voice)"
+                        />
+                        <button
+                          className="vs-section-x"
+                          onClick={() => onToggleDivider(path)}
+                          title="Remove section divider"
+                        >×</button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr className="vs-insert-row">
+                    <td colSpan={totalCols}>
+                      <button
+                        className="vs-insert"
+                        onClick={() => onToggleDivider(path)}
+                        title="Insert a labeled section divider here"
+                      >
+                        <span className="vs-insert-line"></span>
+                        <span className="vs-insert-chip">+ Section divider</span>
+                        <span className="vs-insert-line"></span>
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                <tr className={colorClass + detachedClass}>
                   {cols.subnet && (
                     <td>
                       <div className="vs-cell vs-subnet">
@@ -465,7 +522,7 @@ function NetworkBlock({ idx, tree, cols, canRemove, onSplit, onJoin, onLeafProp,
                         onClick={() => onSplit(path)}
                         disabled={!canSplit}
                         title={canSplit ? `Split into 2 × /${leaf.prefix + 1}` : (leaf.detached ? 'Subnet has been separated' : 'Cannot split /32')}
-                      >Divide</button>
+                      >Split</button>
                       <button
                         className="vs-act"
                         onClick={() => onJoin(path.slice(0, -1))}
@@ -474,18 +531,21 @@ function NetworkBlock({ idx, tree, cols, canRemove, onSplit, onJoin, onLeafProp,
                       >Join</button>
                       {canDetach
                         ? <button
-                            className="vs-act"
+                            className="vs-act vs-act-icon"
                             onClick={() => onDetach(path)}
-                            title="Carve out as its own top-level network in this workspace"
-                          >Separate</button>
+                            title="Separate — carve this subnet out as its own network below"
+                            aria-label="Separate subnet into its own network"
+                          >⊕</button>
                         : <button
-                            className="vs-act"
+                            className="vs-act vs-act-icon"
                             onClick={() => onReattach(path)}
-                            title="Reattach into this network (does not remove the separated copy)"
-                          >Reattach</button>}
+                            title="Reattach — fold this subnet back into the plan"
+                            aria-label="Reattach subnet into this network"
+                          >⊖</button>}
                     </div>
                   </td>
                 </tr>
+                </React.Fragment>
               );
             })}
           </tbody>
