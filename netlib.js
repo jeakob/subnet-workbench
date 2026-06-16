@@ -506,7 +506,7 @@
     if (!node.leaf || node.prefix >= 32) return node;
     const childPrefix = node.prefix + 1;
     const half = Math.pow(2, 32 - childPrefix);
-    const left = { leaf: true, ip: node.ip, prefix: childPrefix, note: node.note, color: node.color };
+    const left = { leaf: true, ip: node.ip, prefix: childPrefix, note: node.note, color: node.color, divider: node.divider, dividerLabel: node.dividerLabel };
     const right = { leaf: true, ip: (node.ip + half) >>> 0, prefix: childPrefix, note: node.note, color: node.color };
     return { leaf: false, ip: node.ip, prefix: node.prefix, left, right };
   }
@@ -515,7 +515,7 @@
   }
   function vs_join(node) {
     if (!vs_can_join(node)) return node;
-    return { leaf: true, ip: node.ip, prefix: node.prefix, note: node.left.note || node.right.note, color: node.left.color || node.right.color };
+    return { leaf: true, ip: node.ip, prefix: node.prefix, note: node.left.note || node.right.note, color: node.left.color || node.right.color, divider: node.left.divider, dividerLabel: node.left.dividerLabel };
   }
   function vs_walk_leaves(node, fn, path) {
     path = path || [];
