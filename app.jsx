@@ -69,7 +69,7 @@ function App() {
             <circle cx="16" cy="16" r="1.8" fill="var(--bg)"/>
           </svg>
           <span>Subnet Workbench</span>
-          <sub>v1</sub>
+          <sub>v2</sub>
         </div>
         <nav className="tabs">
           {TABS.map(x => (
